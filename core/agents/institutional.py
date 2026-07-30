@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Literal, List
 from pydantic import BaseModel, Field
 from core.agents.base_agent import BaseAgent
 from core.llm import institutional_llm
@@ -9,68 +9,85 @@ from core.state import StockState
 # ---------------------------------------------------------
 
 class OwnershipAnalysis(BaseModel):
-    crowdedness_level: Literal["Low", "Medium", "High", "Extreme"] = Field(description="Assessment of how crowded the long or short side is.")
-    short_squeeze_potential: Literal["Low", "Medium", "High"] = Field(description="Risk of a violent short squeeze based on deterministic short interest data.")
-    flow_narrative: str = Field(description="Interpretation of recent 13F filings, insider buying/selling, and fund flows.")
+    # The LLM extracts these directly from the deterministic Data Layer
+    # for downstream Portfolio Manager consumption.
+    institutional_ownership_pct: float = Field(description="Extract directly from deterministic data. Do not invent.")
+    insider_activity: str = Field(description="Interpretation of insider buying/selling trends.")
+    hedge_fund_activity: str = Field(description="Interpretation of smart money 13F flows.")
+    passive_vs_active: str = Field(description="Analysis of passive ETF holding vs active stock picking.")
 
-class ExpectationAnalysis(BaseModel):
-    priced_in_scenario: str = Field(description="The exact scenario currently priced into the stock (e.g., 'Flawless execution of AI infrastructure rollout').")
-    multiple_expansion_catalysts: list[str] = Field(description="Events that would force Wall Street to raise their multiples.")
-    multiple_compression_risks: list[str] = Field(description="Events that would cause institutional rotation out of the stock.")
+class MarketExpectations(BaseModel):
+    revenue_growth_expected: str = Field(description="Specific revenue growth explicitly priced in.")
+    eps_growth_expected: str = Field(description="Specific EPS growth explicitly priced in.")
+    margin_expectation: str = Field(description="What the street assumes about future margins.")
+    ai_expectation: str = Field(description="What execution/growth is expected regarding AI/Tech themes.")
+    pricing_assumption: str = Field(description="What multiples/valuations Wall Street expects to persist.")
+
+class Asymmetry(BaseModel):
+    upside_trigger: str = Field(description="Specific catalyst that forces a re-rating higher.")
+    downside_trigger: str = Field(description="Specific catalyst that breaks the thesis.")
+    upside_magnitude: str = Field(description="Estimated magnitude of the upside move (e.g., '+20% on multiple expansion').")
+    downside_magnitude: str = Field(description="Estimated magnitude of downside risk (e.g., '-40% to historical base').")
 
 # ---------------------------------------------------------
-# 2. Main Output Model (The Desk's Final Report)
+# 2. Main Output Model (The Prime Brokerage Report)
 # ---------------------------------------------------------
 
 class InstitutionalOutput(BaseModel):
     # Embedded Structured Data
     ownership: OwnershipAnalysis
-    expectations: ExpectationAnalysis
+    expectations: MarketExpectations
+    asymmetry: Asymmetry
 
-    # Quantitative Final Estimates
-    positioning_score: float = Field(description="Score from 0.0 to 10.0 indicating favorability of current positioning (10 = highly asymmetric upside).")
-    sentiment_trend: Literal["Improving", "Stagnant", "Deteriorating"] = Field(description="Directional momentum of analyst revisions and options sentiment.")
-    
-    # Universal Requirement
-    confidence: float = Field(description="Confidence score in this positioning assessment (0.0 to 1.0).")
+    # The Alpha Generators ⭐⭐⭐⭐⭐
+    expectation_gap: Literal["Positive", "Neutral", "Negative"] = Field(description="Reality vs Consensus. Positive means Reality > Consensus.")
+    wall_street_is_wrong_about: str = Field(description="The single biggest mispricing in Wall Street's current narrative.")
+    rotation_probability: float = Field(description="Probability (0.0 to 1.0) of institutional capital rotating INTO or OUT OF this stock.")
+    time_horizon: Literal["Next Earnings", "12 Months", "3 Years"] = Field(description="The timeframe for which this positioning setup is most relevant.")
 
-    # Categorical Output (Namespaced for the CIO)
-    flow_rating: Literal["Accumulation Setup", "Neutral", "Distribution Risk", "Dangerously Crowded"] = Field(description="Strict categorical rating based on institutional flow.")
-    rationale: str = Field(description="Core justification for the assigned flow rating.")
+    # Surprise Modeling
+    positive_surprises: List[str] = Field(description="Specific events that would catch consensus off-guard to the upside.")
+    negative_surprises: List[str] = Field(description="Specific events that would catch consensus off-guard to the downside.")
+
+    # Split Confidence Metrics
+    data_confidence: float = Field(description="Confidence (0.0 to 1.0) in the raw data provided (e.g., missing 13Fs lowers this).")
+    analysis_confidence: float = Field(description="Confidence (0.0 to 1.0) in the interpretation of the setup.")
+
 
 # ---------------------------------------------------------
 # 3. The Strict Persona 
 # ---------------------------------------------------------
 
-INSTITUTIONAL_PROMPT = """You are the Head of Institutional Equities at Goldman Sachs.
-Your sole responsibility is to INTERPRET deterministic market flow data, ownership statistics, and options positioning.
+INSTITUTIONAL_PROMPT = """You are the Head of Prime Brokerage Strategy and Institutional Positioning.
+Your clients are top-tier hedge funds.
+Your responsibility is NOT to determine whether a company is good. 
 
-Your mission is to answer:
-1. What is already priced into the stock?
-2. Is this a crowded trade?
-3. What is the asymmetric setup? (e.g., 'If they miss earnings by 1%, the multiple will compress 20% due to crowded positioning.')
+Your responsibility is to determine:
+1. What expectations are priced in.
+2. What expectations are wrong.
+3. Where institutional capital is most likely to flow.
 
 CRITICAL CONSTRAINTS:
-- Do NOT evaluate the business model (that is Fidelity's job).
-- Do NOT calculate intrinsic value (that is the Valuation Desk's job).
-- Ignore macroeconomics unless directly tied to sector fund flows.
-- You are strictly reading the 'poker table'. Who is on the other side of this trade?"""
+- Ignore valuation (that is the Valuation Desk's job).
+- Ignore management quality (Fidelity handles that).
+- Focus entirely on expectations versus reality.
+- NEVER invent numeric data (Short Interest, Institutional %). Extract them exactly from the Data Layer context.
+- Your goal is to identify asymmetric setups and crowded trades."""
 
 # ---------------------------------------------------------
-# 4. The Agent Class (Injecting the Flow Engine's Work)
+# 4. The Agent Class 
 # ---------------------------------------------------------
 
 class InstitutionalAgent(BaseAgent):
     def build_context(self, state: StockState) -> str:
         context = super().build_context(state)
         
-        # We expect a dedicated Data Engine to have pulled Options flow, 
-        # Short Interest, Insider Trades, and 13F changes.
+        # Pulling purely from the deterministic Data Layer and the new Consensus Agent
         if state.get("raw_data"):
             if "institutional_metrics" in state["raw_data"]:
-                context += f"\n\n[DETERMINISTIC FLOW DATA (Short Int, Put/Call, 13F)]:\n{state['raw_data']['institutional_metrics']}"
-            if "analyst_revisions" in state["raw_data"]:
-                context += f"\n\n[ANALYST EPS REVISION TRENDS]:\n{state['raw_data']['analyst_revisions']}"
+                context += f"\n\n[DETERMINISTIC FLOW DATA]:\n{state['raw_data']['institutional_metrics']}"
+            if "consensus_estimates" in state["raw_data"]:
+                context += f"\n\n[CONSENSUS ESTIMATES (Whisper & Target)]:\n{state['raw_data']['consensus_estimates']}"
                 
         return context
 
