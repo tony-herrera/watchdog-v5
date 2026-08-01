@@ -1,0 +1,23 @@
+# core/config/validation_weights.yaml
+version: "5.0"
+
+source_confidence:
+  "SEC Edgar": 1.0
+  "Calculated": 1.0
+  "Polygon": 0.95
+  "Yahoo Finance": 0.85
+  "Manual": 0.50
+
+sector_weights:
+  General:
+    valuation: 0.35
+    consensus: 0.30
+    research: 0.35
+  Technology:
+    valuation: 0.25
+    consensus: 0.25
+    research: 0.50
+  Financials:
+    valuation: 0.30
+    macro: 0.40
+    research: 0.30
