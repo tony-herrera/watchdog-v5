@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-primary: #0B0F19;
+  --bg-panel: #111827;
+  --border-subtle: #1F2937;
+
+  --text-primary: #F3F4F6;
+  --text-secondary: #9CA3AF;
+  --text-muted: #4B5563;
+
+  --positive: #10B981;
+  --negative: #EF4444;
+  --warning: #F59E0B;
+  --neutral: #64748B;
+}
+
+@layer base {
+  body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+}
+
+/* Tabular Monospace for Financial Stability */
+.tabular-data {
+  font-family: "SFMono-Regular", "Roboto Mono", Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* High-Density Dense Panel Styling */
+.terminal-panel {
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+}
